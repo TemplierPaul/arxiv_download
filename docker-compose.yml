@@ -1,0 +1,9 @@
+services:
+  arxiv-processor:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # CHANGE './papers' to your preferred absolute path if needed
+      # This is where the folders will appear on your laptop
+      - /Users/ptemplie/Documents/ICLVault/Sources:/output
