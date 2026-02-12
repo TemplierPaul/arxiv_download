@@ -27,13 +27,13 @@ docker compose up --build -d
 ## 3. Usage Instructions
 
 ### Run It
-1. Go to an ArXiv paper (e.g., [https://arxiv.org/abs/1703.03858](https://arxiv.org/abs/1703.03858)).
+1. Go to an ArXiv paper (e.g., [https://arxiv.org/abs/1901.01753](https://arxiv.org/abs/1901.01753)).
 2. Click the extension icon.
-3. Type a descriptive name for the folder (e.g., `lol-dota-paper`).
+3. Type a descriptive name for the folder (e.g., `poet`).
 4. Hit **Enter**.
 
 ### Result
-Check your local output folder (as configured in `docker-compose.yml`). You will see a folder named after your input (e.g., `lol-dota-paper`) containing:
+Check your local output folder (as configured in `docker-compose.yml`). You will see a folder named after your input (e.g., `poet`) containing:
 
 - **Raw .tex files**: All extracted source files from ArXiv.
 - **_full_paper_context.txt**: A single file with all text combined and comments stripped, ready for immediate drag-and-drop into your LLM.

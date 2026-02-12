@@ -8,7 +8,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
-from pylatexenc.latex2text import LatexNodes2Text
+
+# We removed pylatexenc because it requires full context to work safely
+# and often swallows custom commands defined in other files.
 
 app = FastAPI()
 
@@ -31,23 +33,38 @@ def get_arxiv_id(url: str):
         raise ValueError("Could not find ArXiv ID in URL")
     return match.group(1)
 
-def clean_latex(latex_content: str) -> str:
+def safe_clean_latex(text: str) -> str:
     """
-    Uses pylatexenc to parse LaTeX and convert to plain text.
+    A robust cleaner that uses Regex instead of a parser.
+    It prioritizes preserving content over perfect formatting.
     """
-    try:
-        # math_mode='text' keeps math symbols but tries to use unicode
-        converter = LatexNodes2Text(math_mode='text', keep_comments=False)
-        text = converter.latex_to_text(latex_content)
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        # 1. Strip full line comments
+        stripped = line.strip()
+        if stripped.startswith('%'):
+            continue
+            
+        # 2. Remove inline comments (careful with \%)
+        # This regex looks for % not preceded by \
+        line = re.sub(r'(?<!\\)%.*', '', line)
         
-        # Cleanup whitespace
-        text = re.sub(r'\n{3,}', '\n\n', text) 
-        text = re.sub(r'[ \t]+', ' ', text)
-        return text.strip()
-    except Exception as e:
-        print(f"Warning: pylatexenc failed: {e}. Falling back to basic strip.")
-        lines = [l for l in latex_content.split('\n') if not l.strip().startswith('%')]
-        return '\n'.join(lines)
+        # 3. Skip purely structural/noisy lines
+        # Skips \usepackage, \input, \include (optional, but saves tokens)
+        if stripped.startswith(r'\usepackage') or \
+           stripped.startswith(r'\bibliographystyle'):
+            continue
+            
+        cleaned_lines.append(line)
+
+    text = '\n'.join(cleaned_lines)
+    
+    # 4. Collapse excessive whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text) 
+    
+    return text
 
 @app.post("/process")
 async def process_paper(req: PaperRequest):
@@ -107,23 +124,22 @@ async def process_paper(req: PaperRequest):
                 with open(tex_source, 'r', encoding='utf-8', errors='ignore') as f:
                     raw_content = f.read()
                 
-                # CLEAN
-                cleaned_text = clean_latex(raw_content)
+                # CLEAN (Safe Mode)
+                cleaned_text = safe_clean_latex(raw_content)
                 
                 # Write CLEAN INDIVIDUAL file
                 with open(dest, 'w', encoding='utf-8') as f:
                     f.write(cleaned_text)
 
-                # Append to AGGREGATE list with Markdown formatting
+                # Append to AGGREGATE list
                 header = f"# File: {dest.name}"
                 full_text_content.append(f"{header}\n\n{cleaned_text}\n")
                     
             except Exception as e:
                 print(f"Skipping processing of {tex_source.name}: {e}")
 
-        # 5. Write the AGGREGATE file as Markdown
+        # 5. Write the AGGREGATE file
         with open(target_dir / "_full_paper_context.md", "w", encoding='utf-8') as f:
-            # Use a horizontal rule between files for cleaner LLM ingestion
             f.write("\n---\n\n".join(full_text_content))
 
         return {"status": "success", "path": str(target_dir), "files_found": len(tex_files_found)}
